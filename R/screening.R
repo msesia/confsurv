@@ -1,3 +1,6 @@
+#' @importFrom stats approxfun
+NULL
+
 #' Select Patients Based on Survival Bands
 #'
 #' Applies a screening rule to select patients whose conformal survival bands meet a specified risk threshold.

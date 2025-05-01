@@ -1,4 +1,7 @@
-#' Fast Survival Probability Extraction at Specific Times
+#' @importFrom stats p.adjust runif
+NULL
+
+#' #' Fast Survival Probability Extraction at Specific Times
 #'
 #' Computes survival probabilities at specific time points using a fitted survival model,
 #' optionally interpolating if the target time points are not in the model's time grid.
@@ -11,7 +14,7 @@
 #' @param transform A function applied to the survival probabilities (default: `identity`).
 #'
 #' @return A numeric vector of survival probabilities at the specified target times.
-#' @export
+#' @keywords internal
 fast_predict_at_times <- function(model, data, target_times, time_grid = NULL, transform = identity) {
   # Use unique target times as time grid if none provided
   if (is.null(time_grid)) {
@@ -52,7 +55,7 @@ fast_predict_at_times <- function(model, data, target_times, time_grid = NULL, t
 #' @param fast Whether to use vectorized approximations (recommended: `TRUE`).
 #'
 #' @return A matrix of p-values (rows: patients, columns: time points).
-#' @export
+#' @keywords internal
 compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100, alternative="greater",
                        break_ties=FALSE, fast=TRUE) {
     if(is.null(time_points)) {
@@ -185,8 +188,6 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #' to construct valid marginal prediction intervals. If \code{doubly_robust = TRUE}, the lower and upper bounds
 #' are clipped to ensure they lie within the model-predicted curve, improving practical performance.
 #'
-#' @seealso [compute_cp()], [calibrate_survival()]
-#' 
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
                                     doubly_robust=TRUE, fast=TRUE) {
@@ -207,8 +208,8 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
     ## Compute model predictions
     model_pred <- matrix(surv_model$predict(data.test, time_points)$predictions, nrow(data.test), ncol = length(time_points))
     colnames(model_pred) <- time_points
-    if(doupperly_robust) {
-        ## Make results doupperly robust (not used)
+    if(doubly_robust) {
+        ## Make results doubly robust (not used)
         lower_dr <- pmin(lower, model_pred)
         lower_dr <- matrix(lower_dr, nrow(data.test), ncol = length(time_points))
         upper_dr <- pmax(upper, model_pred)

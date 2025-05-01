@@ -1,4 +1,11 @@
-#' Initialize a Survival Model
+#' @importFrom stats approx approxfun splinefun model.response model.frame model.matrix predict pnorm qnorm runif
+#' @importFrom survival survreg survreg.control coxph basehaz
+#' @importFrom randomForestSRC rfsrc
+#' @importFrom grf survival_forest
+#' @importFrom R6 R6Class
+NULL
+
+#' #' Initialize a Survival Model
 #'
 #' Instantiates a survival model wrapper object based on the selected model type.
 #'
@@ -101,111 +108,32 @@ get_survival_prob_at_time <- function(pred, time_points) {
 #' }
 #'
 #' @export
-SurvivalModelWrapper <- R6::R6Class("SurvivalModelWrapper",
+SurvivalModelWrapper <- R6Class("SurvivalModelWrapper",
   public = list(
     model = NULL,                ## Holds the trained model object.
     formula = NULL,              ## Stores the formula used to fit the model.
     time.points = NULL,          ## A sequence of time points for which survival probabilities are calculated.
     use_covariates = NULL,       ## List of relevant covariates (e.g., c("X1", "X3")) to use when fitting the censoring model
 
-    ## Constructor
-    ## Description: Default constructor
+
+    #' @description Constructor for SurvivalModelWrapper.
+    #' @param use_covariates Optional character vector of covariates to be used.
     initialize = function(use_covariates = NULL) {
       self$use_covariates <- use_covariates
     },
 
-    ## Abstract method to fit a survival model
-    ## Description:
-    ##   This method is abstract and must be implemented in the subclass. It is responsible for fitting
-    ##   a survival model using the specified formula and data. The subclass should define the specific
-    ##   survival model to be fitted (e.g., parametric survival model using `survreg`, Cox proportional hazards,
-    ##   random survival forest). The fitted model should be stored in the `model` field of the class for later use
-    ##   in prediction methods. After fitting the model, relevant time points (e.g., failure times) should also be
-    ##   stored in 'self$time.points' for use in survival predictions.
-    #
-    ## Inputs:
-    ##   - formula: A survival formula of the form `Surv(time, status) ~ predictors`. The formula should
-    ##              specify the time-to-event outcome (`Surv(time, status)`) and the predictor variables.
-    ##   - data: A data.frame containing the predictor variables, the time variable, and the status variable.
-    ##           The data frame must have a column for the time-to-event (e.g., `time`), a binary status
-    ##           variable indicating the event occurrence (e.g., `status`), and the predictor variables.
-    #
-    ## Outputs:
-    ##   - None. The method does not return a value, but the fitted model should be stored in the `model` field
-    ##     of the class for subsequent use in prediction methods like `predict` or `predict_quantiles`.
-    #
-    ## Notes for Subclass Implementation:
-    ##   - The subclass should implement this method to define the specific survival model being used.
-    ##   - Once the model is fitted, it should be stored in the `self$model` field, making it accessible for
-    ##     other methods (e.g., `predict`, `predict_quantiles`).
-    ##   - If the model involves failure times (e.g., parametric models like `survreg`), these times can also
-    ##     be stored in a field such as `self$time.points` to be used later for survival predictions.
-    #
-    ## Example of Subclass Implementation Using `survreg`:
-    ##   - In a subclass using a parametric survival model via `survreg`:
-    ##     fit = function(formula, data, dist = "weibull") {
-    ##       ## Fit a parametric survival model using the `survreg` function from the `survival` package
-    ##       self$model <- survival::survreg(formula, data = data, dist = dist)
-    #
-    ##       ## Store the range of observed times to help generate predictions later
-    ##       self$time.points <- seq(min(data$time), max(data$time), length.out = 100)
-    ##     }
-    #
+    #' @description Abstract method for fitting a survival model. Should be implemented in subclass.
+    #' @param formula A survival formula (e.g., Surv(time, status) ~ predictors).
+    #' @param data A data.frame with columns for time, status, and covariates.
     fit = function(formula, data) {
       stop("This method should be implemented in the subclass.")
     },
 
 
-    ## Default method to predict survival curves
-    ## Description:
-    ##   This method predicts survival curves for a given set of new data. It is intended to be used
-    ##   by subclasses of `SurvivalModelWrapper` and relies on the `predict_quantiles()` method,
-    ##   which should be defined in the subclass. If the `predict_quantiles()` method is not defined,
-    ##   this method should be implemented in the subclass. The method supports interpolating survival
-    ##   probabilities at specified custom failure times. If no custom failure times are provided, the default
-    ##   failure times from the model are used.
-    #
-    ##   Note: At least one of `predict` or `predict_quantiles` needs to be implemented in the subclass.
-    #
-    #
-    ## Inputs:
-    ##   - new_data: A data.frame containing new predictor variables for which to predict survival curves.
-    ##               The data frame must have the same structure as the data used to train the model.
-    ##   - time.points: (Optional) A numeric vector of custom failure times at which survival probabilities
-    ##                    should be interpolated. If NULL, the default failure times from the model are used.
-    #
-    ## Outputs:
-    ##   - A list with two components:
-    ##     - `predictions`: A matrix of survival probabilities. Each row corresponds to an individual from
-    ##                      `new_data`, and each column corresponds to a failure time. The value in each
-    ##                      cell represents the survival probability at the corresponding failure time.
-    ##     - `time.points`: A numeric vector of the failure times at which survival probabilities were
-    ##                        calculated (either the provided custom times or the model's default times).
-    #
-    ## Steps:
-    ##   1. The function begins by checking if `time.points` is provided. If not, it defaults to using
-    ##      `self$time.points`, which should have been set during model fitting. If `time.points` is
-    ##      still NULL, an error is raised.
-    #
-    ##   2. It generates survival quantiles for the individuals in `new_data` by calling `self$predict_quantiles()`.
-    ##      This method should return the predicted survival times (quantiles) for each probability in the
-    ##      specified `probs` sequence (default: `seq(0.01, 0.99, by = 0.01)`).
-    #
-    ##   3. A matrix `survival_probs` is initialized to store the interpolated survival probabilities for
-    ##      each individual at the provided `time.points`.
-    #
-    ##   4. For each individual, the function constructs an interpolation function using `approxfun()`
-    ##      to perform linear monotone decreasing interpolation between the predicted quantiles and their
-    ##      corresponding probabilities. The survival probabilities are then interpolated at the specified
-    ##      `time.points`.
-    #
-    ##   5. Finally, the method returns a list containing the matrix of predicted survival probabilities
-    ##      (`predictions`) and the vector of failure times (`time.points`).
-    #
-    ## Example Usage:
-    ##   survival_predictions <- model$predict(new_data = test_data)
-    ##   survival_predictions_custom <- model$predict(new_data = test_data, time.points = c(100, 200, 300))
-    #
+    ## ' @description Predicts survival probabilities for individuals in new data.
+    #' @param new_data A data.frame of new individuals with covariates.
+    #' @param time.points Optional vector of time points. Defaults to model's time.points.
+    #' @return A list with `predictions` (matrix of survival probabilities) and `time.points`.
     predict = function(new_data, time.points = NULL) {
       ## If time.points is not provided, use the default values from the model
       if (is.null(time.points)) {
@@ -240,46 +168,10 @@ SurvivalModelWrapper <- R6::R6Class("SurvivalModelWrapper",
       list(predictions = survival_probs, time.points = time.points)
     },
 
-    ## Default method to predict survival quantiles
-    ## Description:
-    ##   This method predicts survival quantiles for a given set of new data. It uses the predicted
-    ##   survival curves generated by the `predict` method, so the `predict` method
-    ##   must be implemented in the subclass. If `predict_quantiles` is not overridden in the subclass,
-    ##   this default implementation will be used.
-    #
-    ##   Note: At least one of `predict` or `predict_quantiles` needs to be implemented in the subclass.
-    #
-    ## Inputs:
-    ##   - new_data: A data.frame containing new predictor variables for which to predict survival quantiles.
-    ##               The data frame must have the same structure as the data used to train the model.
-    ##   - probs: A numeric vector of quantile probabilities (e.g., `c(0.25, 0.5, 0.75)` for the 25th, 50th,
-    ##            and 75th percentiles). These represent the survival probabilities at which the quantile
-    ##            survival times will be calculated.
-    #
-    ## Outputs:
-    ##   - A data.frame where each row corresponds to an individual in `new_data`, and each column corresponds
-    ##     to one of the requested quantiles. The values in the data frame represent the survival times (in terms
-    ##     of time points) at which the specified survival probabilities (`probs`) are reached.
-    #
-    ## Method Overview:
-    ##   1. The method begins by calling `self$predict(new_data)` to obtain the survival curves
-    ##      for each individual in `new_data`. The survival curves represent the survival probabilities
-    ##      at various time points.
-    #
-    ##   2. The method defines an internal function `find_quantile` that, for each individual, locates the
-    ##      first time point where the survival probability drops below the specified percentile (1 - quantile).
-    ##      The corresponding time point is recorded as the quantile survival time.
-    #
-    ##   3. The method loops over each individual, applying `find_quantile` to compute the survival times
-    ##      corresponding to the specified quantiles (`probs`).
-    #
-    ##   4. Finally, the method returns a data frame where each row contains the predicted quantiles for
-    ##      each individual, and each column corresponds to a specific quantile probability (e.g., Q25%, Q50%, Q75%).
-    #
-    ## Example Usage:
-    ##   quantiles_df <- model$predict_quantiles(new_data = test_data, probs = c(0.25, 0.5, 0.75))
-    ##   quantiles_df <- model$predict_quantiles(new_data = test_data)  ## Uses default probs: c(0.25, 0.5, 0.75)
-    #
+    #' @description Predicts survival quantiles (e.g. median, quartiles).
+    #' @param new_data New data with covariates.
+    #' @param probs Numeric vector of quantile probabilities. Defaults to c(0.25, 0.5, 0.75).
+    #' @return A data.frame of predicted quantiles for each individual.
     predict_quantiles = function(new_data, probs = c(0.25, 0.5, 0.75)) {
         ## Predict survival curves
         predictions <- self$predict(new_data)
@@ -316,7 +208,11 @@ SurvivalModelWrapper <- R6::R6Class("SurvivalModelWrapper",
         return(as.data.frame(quantiles_df))
     },
 
-    ## Predict survival with interpolation of survival probabilities at custom failure times (utility)
+    #' @description Linearly interpolates survival probabilities at new time points.
+    #' @param survival_probs Matrix of survival probabilities.
+    #' @param original_failure_times Original time points corresponding to survival_probs.
+    #' @param time.points New time points to interpolate to.
+    #' @return Matrix of interpolated probabilities.
     predict_interpolate = function(survival_probs, original_failure_times, time.points) {
       ## Initialize a matrix to store interpolated survival probabilities
       survival_probs_interp <- matrix(NA, nrow = nrow(survival_probs), ncol = length(time.points))
@@ -334,15 +230,10 @@ SurvivalModelWrapper <- R6::R6Class("SurvivalModelWrapper",
       return(survival_probs_interp)
     },
 
-    ## Parse formula method (utility)
-    ## Description: Parses a survival formula and extracts the response variables (time and status) and covariates (predictors).
-    ## Input:
-    ##   - formula: A survival formula of the form `Surv(time, status) ~ predictors`.
-    ##   - data: A data.frame containing the time, status, and predictor variables.
-    ## Output: A list with three components:
-    ##   - time: A vector of survival times.
-    ##   - status: A vector indicating whether the event (death) occurred (1) or was censored (0).
-    ##   - covariates: A matrix of covariate data (predictor variables), excluding the intercept.
+    #' @description Parses a survival formula and extracts components.
+    #' @param formula A survival formula, e.g., Surv(time, status) ~ X1 + X2.
+    #' @param data A data.frame containing survival and covariate columns.
+    #' @return A list with `time`, `status`, and `covariates`.
     parse_formula = function(formula, data) {
       self$formula <- formula
       response <- model.response(model.frame(formula, data))
@@ -352,8 +243,10 @@ SurvivalModelWrapper <- R6::R6Class("SurvivalModelWrapper",
       list(time = time, status = status, covariates = covariates)
     },
 
-  ## Select relevant columns
-  select_columns = function(new_data) {
+    #' @description Subsets the data to only include selected covariates.
+    #' @param new_data A data.frame to filter.
+    #' @return A filtered data.frame with only the relevant covariates.
+    select_columns = function(new_data) {
       if(!is.null(self$use_covariates)) {
           new_data_sel <- new_data %>% select(time, status, self$use_covariates)
       } else {
@@ -371,13 +264,16 @@ SurvivalModelWrapper <- R6::R6Class("SurvivalModelWrapper",
 #' @description
 #' Implements a wrapper for generalized random forest survival models using the \pkg{grf} package.
 #'
-#' @inherit SurvivalModelWrapper
 #' @export
-GRF_SurvivalForestWrapper <- R6::R6Class("GRF_SurvivalForestWrapper",
+GRF_SurvivalForestWrapper <- R6Class("GRF_SurvivalForestWrapper",
   inherit = SurvivalModelWrapper,
   public = list(
-
-    ## Fit method
+ 
+    #' @description
+    #' Fit a generalized random forest survival model using the \pkg{grf} package.
+    #'
+    #' @param formula A survival formula of the form \code{Surv(time, status) ~ predictors}.
+    #' @param data A data.frame containing columns for time, status, and covariates.
     fit = function(formula, data) {
       data <- self$select_columns(data)
       parsed_data <- self$parse_formula(formula, data)
@@ -393,7 +289,17 @@ GRF_SurvivalForestWrapper <- R6::R6Class("GRF_SurvivalForestWrapper",
       }
     },
 
-    ## Predict survival curves with optional custom failure times
+    #' @description
+    #' Predicts survival probabilities at specified time points for new data.
+    #'
+    #' @param new_data A data.frame of new observations with the same structure as the training data.
+    #' @param time.points Optional numeric vector of time points at which to compute predictions.
+    #'
+    #' @return A list with:
+    #' \describe{
+    #'   \item{\code{predictions}}{Matrix of survival probabilities (rows = individuals, cols = time points).}
+    #'   \item{\code{time.points}}{Vector of time points used in prediction.}
+    #' }
     predict = function(new_data, time.points = NULL) {
       new_data <- self$select_columns(new_data)
 
@@ -429,19 +335,19 @@ GRF_SurvivalForestWrapper <- R6::R6Class("GRF_SurvivalForestWrapper",
 #' @description
 #' Wrapper for the \code{randomForestSRC::rfsrc()} survival model.
 #'
-#' @inherit SurvivalModelWrapper
 #' @export
-randomForestSRC_SurvivalWrapper <- R6::R6Class("randomForestSRC_SurvivalWrapper",
+randomForestSRC_SurvivalWrapper <- R6Class("randomForestSRC_SurvivalWrapper",
   inherit = SurvivalModelWrapper,
   public = list(
 
-    ## Constructor
-    ## Description: Default constructor
-    initialize = function(use_covariates = NULL) {
-      self$use_covariates <- use_covariates
-    },
-
-    ## Fit method
+    #' @description
+    #' Fits a survival forest model using the \pkg{randomForestSRC} package.
+    #' This method parses the survival formula and fits a random survival forest to the data.
+    #'
+    #' @param formula A survival formula, typically \code{Surv(time, status) ~ predictors}.
+    #' @param data A data.frame containing time, status, and covariates.
+    #' @param ntree Number of trees to grow in the forest (default = 100).
+    #' @param ... Additional arguments passed to \code{randomForestSRC::rfsrc()}.
     fit = function(formula, data, ntree = 100, ...) {
       data <- self$select_columns(data)
 
@@ -464,7 +370,17 @@ randomForestSRC_SurvivalWrapper <- R6::R6Class("randomForestSRC_SurvivalWrapper"
       }
     },
 
-    ## Predict survival curves
+    #' @description
+    #' Predicts survival probabilities at specified time points for new data.
+    #'
+    #' @param new_data A data.frame of new observations with the same structure as the training data.
+    #' @param time.points Optional numeric vector of time points at which to compute predictions.
+    #'
+    #' @return A list with:
+    #' \describe{
+    #'   \item{\code{predictions}}{Matrix of survival probabilities (rows = individuals, cols = time points).}
+    #'   \item{\code{time.points}}{Vector of time points used in prediction.}
+    #' }
     predict = function(new_data, time.points = NULL) {
       new_data <- self$select_columns(new_data)
       ## Ensure that new_data is correctly formatted
@@ -498,23 +414,25 @@ randomForestSRC_SurvivalWrapper <- R6::R6Class("randomForestSRC_SurvivalWrapper"
 #' @description
 #' Wrapper for parametric survival models via \code{survival::survreg()}.
 #'
-#' @inherit SurvivalModelWrapper
+#' @field dist A character string indicating the distribution used by the model (e.g., "weibull", "lognormal").
+#'
 #' @export
-SurvregModelWrapper <- R6::R6Class("SurvregModelWrapper",
+SurvregModelWrapper <- R6Class("SurvregModelWrapper",
   inherit = SurvivalModelWrapper,
   public = list(
     dist = NULL,  ## Distribution parameter
 
-    ## Constructor
-    ## Description: Initializes the SurvregModelWrapper object with the specified distribution.
-    ## Inputs:
-    ##   - dist: The distribution to be used in the survreg model (e.g., "weibull", "lognormal", etc.).
+    #' @description Constructor for SurvregModelWrapper.
+    #' @param use_covariates Optional character vector of covariate names to use.
+    #' @param dist Distribution to use in the survreg model (e.g., \"weibull\", \"lognormal\").
     initialize = function(use_covariates = NULL, dist = "weibull") {
       self$use_covariates <- use_covariates
       self$dist <- dist
     },
-
-    ## Fit method
+ 
+    #' @description Fit a parametric survival model using survreg.
+    #' @param formula A formula of the form \code{Surv(time, status) ~ predictors}.
+    #' @param data A data.frame with survival outcome and covariates.
     fit = function(formula, data) {
       data <- self$select_columns(data)
       parsed_data <- self$parse_formula(formula, data)
@@ -522,7 +440,10 @@ SurvregModelWrapper <- R6::R6Class("SurvregModelWrapper",
       self$time.points <- seq(min(parsed_data$time), max(parsed_data$time), length.out = 100)
     },
 
-    ## Predict quantiles
+    #' @description Predict survival time quantiles.
+    #' @param new_data A data.frame of covariates.
+    #' @param probs A numeric vector of quantile probabilities.
+    #' @return A data.frame of quantile predictions.
     predict_quantiles = function(new_data, probs = c(0.25, 0.5, 0.75)) {
 
       ## Predict quantiles for each probability in probs
@@ -548,19 +469,20 @@ SurvregModelWrapper <- R6::R6Class("SurvregModelWrapper",
 #' @description
 #' Wrapper for Cox proportional hazards models via \code{survival::coxph()}.
 #'
-#' @inherit SurvivalModelWrapper
+#' @field model The fitted Cox model object from \code{survival::coxph()}.
+#' @field formula_env Environment where the formula is evaluated (optional).
+#'
 #' @export
-CoxphModelWrapper <- R6::R6Class("CoxphModelWrapper",
+CoxphModelWrapper <- R6Class("CoxphModelWrapper",
   inherit = SurvivalModelWrapper,
   public = list(
 
     model = NULL,             ## To store the fitted coxph model
     formula_env = NULL,        ## To store the formula environment
 
-    initialize = function(use_covariates = NULL) {
-      self$use_covariates <- use_covariates
-    },
-
+    #' @description Fit a Cox proportional hazards model using coxph().
+    #' @param formula A formula like \code{Surv(time, status) ~ predictors}.
+    #' @param data A data.frame with survival times, censoring indicator, and predictors.
     fit = function(formula, data) {
         data <- self$select_columns(data)
         ## Fit the coxph model and store it
@@ -574,7 +496,11 @@ CoxphModelWrapper <- R6::R6Class("CoxphModelWrapper",
         ## Ensure the environment is set correctly for terms evaluation
         #environment(self$model$terms) <- self$formula_env
     },
-
+ 
+    #' @description Predict survival probabilities for new individuals using Cox model.
+    #' @param new_data A data.frame with covariates.
+    #' @param time.points Optional numeric vector of time points to predict at.
+    #' @return A list with `predictions` matrix and `time.points`.
     predict = function(new_data, time.points = NULL) {
         new_data <- self$select_columns(new_data)
 
