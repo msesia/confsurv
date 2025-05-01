@@ -26,11 +26,11 @@ evaluate_selections_without_oracle(
 \value{
 A data frame with the following columns:
 \describe{
-\item{Screening time}{The time horizon used for screening}
-\item{Screening rule}{A textual description of the rule applied}
+\item{Screening.time}{The time horizon used for screening}
+\item{Screening.rule}{A textual description of the rule applied}
 \item{Screened}{Number of selected patients}
-\item{Proportion survived (lower)}{Conservative estimate assuming censored events occurred at censoring time}
-\item{Proportion survived (upper)}{Liberal estimate assuming censored events never occurred}
+\item{Proportion.survived.lower}{Conservative estimate assuming censored events occurred at censoring time}
+\item{Proportion.survived.upper}{Liberal estimate assuming censored events never occurred}
 }
 }
 \description{

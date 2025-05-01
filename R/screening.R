@@ -95,11 +95,11 @@ select_patients_point <- function(time.points, survival_dist, screening_time, sc
 #'
 #' @return A data frame with the following columns:
 #' \describe{
-#'   \item{Screening time}{The time horizon used for screening}
-#'   \item{Screening rule}{A textual description of the rule applied}
+#'   \item{Screening.time}{The time horizon used for screening}
+#'   \item{Screening.rule}{A textual description of the rule applied}
 #'   \item{Screened}{Number of selected patients}
-#'   \item{Proportion survived (lower)}{Conservative estimate assuming censored events occurred at censoring time}
-#'   \item{Proportion survived (upper)}{Liberal estimate assuming censored events never occurred}
+#'   \item{Proportion.survived.lower}{Conservative estimate assuming censored events occurred at censoring time}
+#'   \item{Proportion.survived.upper}{Liberal estimate assuming censored events never occurred}
 #' }
 #'
 #' @seealso \code{\link{evaluate_selections}}, \code{\link{select_patients_band}}
@@ -116,18 +116,18 @@ evaluate_selections_without_oracle <- function(data.test, idx.selected, screenin
 
   # Evaluate selections using lower oracle
   res.lower <- evaluate_selections(data.test.oracle.lower, idx.selected, screening_time, screening_prob, screening_crit)
-  res.lower$`Proportion survived (lower)` <- res.lower$`Proportion survived`
-  res.lower$`Proportion survived` <- NULL
+  res.lower$Proportion.survived.lower <- res.lower$Proportion.survived
+  res.lower$Proportion.survived <- NULL
   res.lower$Valid <- NULL
 
   # Evaluate selections using upper oracle
   res.upper <- evaluate_selections(data.test.oracle.upper, idx.selected, screening_time, screening_prob, screening_crit)
-  res.upper$`Proportion survived (upper)` <- res.upper$`Proportion survived`
-  res.upper$`Proportion survived` <- NULL
+  res.upper$Proportion.survived.upper <- res.upper$Proportion.survived
+  res.upper$Proportion.survived <- NULL
   res.upper$Valid <- NULL
 
   # Merge the two results by common keys
-  merge(res.lower, res.upper, by = c("Screening time", "Screening rule", "Screened"))
+  merge(res.lower, res.upper, by = c("Screening.time", "Screening.rule", "Screened"))
 }
 
 
@@ -173,13 +173,13 @@ evaluate_selections <- function(data.test.oracle, idx.selected, screening_time, 
 
   rule_desc <- interpret_screening_rule(screening_time, screening_prob, screening_crit)
 
-  result <- list(
-    `Screening time` = screening_time,
-    `Screening rule` = rule_desc,
+  result <- as.data.frame(list(
+    Screening.time = screening_time,
+    Screening.rule = rule_desc,
     Screened = num_selections,
-    `Proportion survived` = prop_selected_alive,
+    Proportion.survived = prop_selected_alive,
     Valid = conservative
-  )
+  ))
 
   return(result)
 }
