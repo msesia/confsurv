@@ -173,6 +173,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #' @param num_time_points Integer specifying number of time points to use if `time_points` is `NULL`. Default is 100.
 #' @param doubly_robust Logical. If `TRUE`, the bands are extended to include the fitted model predictions (default: `TRUE`).
 #' @param fast Logical. Whether to use fast, vectorized approximations for score and weight computations. Recommended. Default is `TRUE`.
+#' @param use_bh Logical. Whether to use the Benjamini–Hochberg adjustment to the conformal p-values. Recommended. Default is `TRUE`.
 #'
 #' @return A list with the following components:
 #' \describe{
@@ -190,7 +191,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #'
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
-                                    doubly_robust=TRUE, fast=TRUE) {
+                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE) {
     n.test <- nrow(data.test)
     if(is.null(time_points)) {
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
@@ -199,8 +200,13 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
     pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast)
     pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast)
     ## Calculate lower and upper bounds using BH
-    upper <- apply(pvals_lt, 2, p.adjust, method = "BH")
-    lower <- 1 - apply(pvals_rt, 2, p.adjust, method = "BH")
+    if(use_bh) {
+      upper <- apply(pvals_lt, 2, p.adjust, method = "BH")
+      lower <- 1 - apply(pvals_rt, 2, p.adjust, method = "BH")
+    } else {
+      upper <- pvals_lt
+      lower <- 1 - pvals_rt
+    }
     upper <- matrix(upper, nrow(data.test), ncol = length(time_points))
     lower <- matrix(lower, nrow(data.test), ncol = length(time_points))
     colnames(lower) <- time_points
