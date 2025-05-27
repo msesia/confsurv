@@ -210,8 +210,12 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
   ## Calculate lower and upper bounds using BH
   if(use_bh) {
     if(use_storey) {
-      pi0_lt <- estimate_pi0(pvals_lt, lambda = 0.5)
-      pi0_rt <- estimate_pi0(pvals_rt, lambda = 0.5)
+      ##cat("NOTE: using Storey's method.\n")
+      pi0_lt <- apply(pvals_lt, 2, estimate_pi0, lambda = 0.5)
+      pi0_rt <- apply(pvals_rt, 2, estimate_pi0, lambda = 0.5)
+      ## Repeat each value across all rows
+      pi0_lt <- matrix(rep(pi0_lt, each = nrow(pvals_lt)), nrow = nrow(pvals_lt), byrow = FALSE)
+      pi0_rt <- matrix(rep(pi0_rt, each = nrow(pvals_rt)), nrow = nrow(pvals_rt), byrow = FALSE)
       upper <- pmin(1, pi0_lt*apply(pvals_lt, 2, p.adjust, method = "BH"))
       lower <- 1 - pmin(1, pi0_rt*apply(pvals_rt, 2, p.adjust, method = "BH"))
     } else {
