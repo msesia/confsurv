@@ -193,57 +193,79 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
                                     doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, use_storey=TRUE) {
-  n.test <- nrow(data.test)
-  if(is.null(time_points)) {
-    time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
-  }
-  ## Calculate conformal pvalues
-  pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast)
-  pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast)
-  ## Define Storey's estimator
-  estimate_pi0 <- function(pvals, lambda = 0.5) {
-    m <- length(pvals)
-    pi0_hat <- (mean(pvals > lambda)+1/m) / (1-lambda)
-    pi0_hat <- min(pi0_hat, 1)  # Ensure pi0 is not greater than 1
-    return(pi0_hat)
-  }
-  ## Calculate lower and upper bounds using BH
-  if(use_bh) {
-    if(use_storey) {
-      ##cat("NOTE: using Storey's method.\n")
-      pi0_lt <- apply(pvals_lt, 2, estimate_pi0, lambda = 0.5)
-      pi0_rt <- apply(pvals_rt, 2, estimate_pi0, lambda = 0.5)
-      ## Repeat each value across all rows
-      pi0_lt <- matrix(rep(pi0_lt, each = nrow(pvals_lt)), nrow = nrow(pvals_lt), byrow = FALSE)
-      pi0_rt <- matrix(rep(pi0_rt, each = nrow(pvals_rt)), nrow = nrow(pvals_rt), byrow = FALSE)
-      upper <- pmin(1, pi0_lt*apply(pvals_lt, 2, p.adjust, method = "BH"))
-      lower <- 1 - pmin(1, pi0_rt*apply(pvals_rt, 2, p.adjust, method = "BH"))
-    } else {
-      upper <- apply(pvals_lt, 2, p.adjust, method = "BH")
-      lower <- 1 - apply(pvals_rt, 2, p.adjust, method = "BH")
+    n.test <- nrow(data.test)
+    if(is.null(time_points)) {
+        time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
     }
-  } else {
-    upper <- pvals_lt
-    lower <- 1 - pvals_rt
-  }
-  upper <- matrix(upper, nrow(data.test), ncol = length(time_points))
-  lower <- matrix(lower, nrow(data.test), ncol = length(time_points))
-  colnames(lower) <- time_points
-  colnames(upper) <- time_points
-  ## Compute model predictions
-  model_pred <- matrix(surv_model$predict(data.test, time_points)$predictions, nrow(data.test), ncol = length(time_points))
-  colnames(model_pred) <- time_points
-  if(doubly_robust) {
-    ## Make results doubly robust (not used)
-    lower_dr <- pmin(lower, model_pred)
-    lower_dr <- matrix(lower_dr, nrow(data.test), ncol = length(time_points))
-    upper_dr <- pmax(upper, model_pred)
-    upper_dr <- matrix(upper_dr, nrow(data.test), ncol = length(time_points))
-    colnames(lower_dr) <- time_points
-    colnames(upper_dr) <- time_points
-    lower <- lower_dr
-    upper <- upper_dr
-  }
-  out <- list(lower=lower, upper=upper, time_points=time_points, model_pred=model_pred)
-  return(out)
+    ## Calculate conformal pvalues
+    pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast)
+    pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast)
+    ## ## Define Storey's estimator
+    ## estimate_pi0 <- function(pvals, lambda = 0.5) {
+    ##     m <- length(pvals)
+    ##     pi0_hat <- (mean(pvals > lambda)+1/m) / (1-lambda)
+    ##     pi0_hat <- min(pi0_hat, 1)  # Ensure pi0 is not greater than 1
+    ##     return(pi0_hat)
+    ## }
+    ## Calculate lower and upper bounds using BH
+    if(use_bh) {
+        if(use_storey) {
+            ##cat("NOTE: using Storey's method.\n")
+            #pi0_lt_storey <- apply(pvals_lt, 2, estimate_pi0, lambda = 0.5)
+            ## Estimate an upper bound for the LT null proportion (proportion alive at time t)
+            pi0_lt <- sapply(time_points, function(t) {            
+                ## Number of individuals with observed time >= t
+                n1 <- sum(data.cal$time >= t)
+                ## Number of censored individuals with censoring time <= t (may or may not be alive, count them as alive)
+                n2 <- sum(data.cal$event[data.cal$time <= t] == 0)
+                ## Estimate of proportion alive
+                (1 + n1 + n2) / (1 + nrow(data.cal))
+            })
+            #print("Estimated pi0_lt:")
+            #df_lt = tibble(time=time_points, storey=pi0_lt_storey, new =pi0_lt)
+            #print(df_lt, n=200)
+            #pi0_rt_storey <- apply(pvals_rt, 2, estimate_pi0, lambda = 0.5)
+            ## Estimate an upper bound for the RT null proportion (proportion dead at time t)
+            pi0_rt <- sapply(time_points, function(t) {            
+                ## Number of individuals with observed time <= t (count them all as dead, even if censored)
+                n1 <- sum(data.cal$time <= t)
+                ## Estimate of proportion alive
+                (1 + n1) / (1 + nrow(data.cal))
+            })
+            #print("Estimated pi0_rt:")
+            #df_rt = tibble(time=time_points, storey=pi0_rt_storey, new =pi0_rt)
+            #print(df_rt, n=200)
+            ## Repeat each value across all rows
+            pi0_lt <- matrix(rep(pi0_lt, each = nrow(pvals_lt)), nrow = nrow(pvals_lt), byrow = FALSE)
+            pi0_rt <- matrix(rep(pi0_rt, each = nrow(pvals_rt)), nrow = nrow(pvals_rt), byrow = FALSE)
+            upper <- pmin(1, pi0_lt*apply(pvals_lt, 2, p.adjust, method = "BH"))
+            lower <- 1 - pmin(1, pi0_rt*apply(pvals_rt, 2, p.adjust, method = "BH"))
+        } else {
+            upper <- apply(pvals_lt, 2, p.adjust, method = "BH")
+            lower <- 1 - apply(pvals_rt, 2, p.adjust, method = "BH")
+        }
+    } else {
+        upper <- pvals_lt
+        lower <- 1 - pvals_rt
+    }
+    upper <- matrix(upper, nrow(data.test), ncol = length(time_points))
+    lower <- matrix(lower, nrow(data.test), ncol = length(time_points))
+    colnames(lower) <- time_points
+    colnames(upper) <- time_points
+    ## Compute model predictions
+    model_pred <- matrix(surv_model$predict(data.test, time_points)$predictions, nrow(data.test), ncol = length(time_points))
+    colnames(model_pred) <- time_points
+    if(doubly_robust) {
+        ## Make results doubly robust (not used)
+        lower_dr <- pmin(lower, model_pred)
+        lower_dr <- matrix(lower_dr, nrow(data.test), ncol = length(time_points))
+        upper_dr <- pmax(upper, model_pred)
+        upper_dr <- matrix(upper_dr, nrow(data.test), ncol = length(time_points))
+        colnames(lower_dr) <- time_points
+        colnames(upper_dr) <- time_points
+        lower <- lower_dr
+        upper <- upper_dr
+    }
+    out <- list(lower=lower, upper=upper, time_points=time_points, model_pred=model_pred)
+    return(out)
 }
