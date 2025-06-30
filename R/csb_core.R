@@ -174,7 +174,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #' @param doubly_robust Logical. If `TRUE`, the bands are extended to include the fitted model predictions (default: `TRUE`).
 #' @param fast Logical. Whether to use fast, vectorized approximations for score and weight computations. Recommended. Default is `TRUE`.
 #' @param use_bh Logical. Whether to use the Benjamini–Hochberg adjustment to the conformal p-values. Recommended. Default is `TRUE`.
-#' @param use_storey Logical. Whether to use Storey's methof for estimting the null proportion, to increase power of BH. Default is `TRUE`.
+#' @param estimate_pi0 Logical. Whether to estimate the null proportion, to increase power of BH. Default is `TRUE`.
 #'
 #' @return A list with the following components:
 #' \describe{
@@ -192,7 +192,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #'
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
-                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, use_storey=TRUE) {
+                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, estimate_pi0=TRUE) {
     n.test <- nrow(data.test)
     if(is.null(time_points)) {
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
@@ -209,7 +209,7 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
     ## }
     ## Calculate lower and upper bounds using BH
     if(use_bh) {
-        if(use_storey) {
+        if(estimate_pi0) {
             ##cat("NOTE: using Storey's method.\n")
             #pi0_lt_storey <- apply(pvals_lt, 2, estimate_pi0, lambda = 0.5)
             ## Estimate an upper bound for the LT null proportion (proportion alive at time t)
