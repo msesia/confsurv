@@ -192,7 +192,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #'
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
-                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, estimate_pi0=TRUE) {
+                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, estimate_pi0=FALSE) {
     n.test <- nrow(data.test)
     if(is.null(time_points)) {
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
