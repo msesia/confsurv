@@ -198,43 +198,48 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
     }
     ## Calculate conformal pvalues
-    pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast)
+    pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast)   
     pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast)
-    ## ## Define Storey's estimator
-    ## estimate_pi0 <- function(pvals, lambda = 0.5) {
-    ##     m <- length(pvals)
-    ##     pi0_hat <- (mean(pvals > lambda)+1/m) / (1-lambda)
-    ##     pi0_hat <- min(pi0_hat, 1)  # Ensure pi0 is not greater than 1
-    ##     return(pi0_hat)
-    ## }
+    ## Define Storey's estimator
+    use_storey <- TRUE
+    func_estimate_pi0_storey <- function(pvals, lambda = 0.5) {
+        m <- length(pvals)
+        pi0_hat <- (mean(pvals > lambda)+1/m) / (1-lambda)
+        pi0_hat <- min(pi0_hat, 1)  # Ensure pi0 is not greater than 1
+        return(pi0_hat)
+    }
     ## Calculate lower and upper bounds using BH
     if(use_bh) {
         if(estimate_pi0) {
             ##cat("NOTE: using Storey's method.\n")
-            #pi0_lt_storey <- apply(pvals_lt, 2, estimate_pi0, lambda = 0.5)
             ## Estimate an upper bound for the LT null proportion (proportion alive at time t)
-            pi0_lt <- sapply(time_points, function(t) {            
-                ## Number of individuals with observed time >= t
-                n1 <- sum(data.cal$time >= t)
-                ## Number of censored individuals with censoring time <= t (may or may not be alive, count them as alive)
-                n2 <- sum(data.cal$event[data.cal$time <= t] == 0)
-                ## Estimate of proportion alive
-                (1 + n1 + n2) / (1 + nrow(data.cal))
-            })
-            #print("Estimated pi0_lt:")
-            #df_lt = tibble(time=time_points, storey=pi0_lt_storey, new =pi0_lt)
-            #print(df_lt, n=200)
-            #pi0_rt_storey <- apply(pvals_rt, 2, estimate_pi0, lambda = 0.5)
             ## Estimate an upper bound for the RT null proportion (proportion dead at time t)
-            pi0_rt <- sapply(time_points, function(t) {            
-                ## Number of individuals with observed time <= t (count them all as dead, even if censored)
-                n1 <- sum(data.cal$time <= t)
-                ## Estimate of proportion alive
-                (1 + n1) / (1 + nrow(data.cal))
-            })
-            #print("Estimated pi0_rt:")
-            #df_rt = tibble(time=time_points, storey=pi0_rt_storey, new =pi0_rt)
-            #print(df_rt, n=200)
+            if(use_storey) {
+                pi0_lt <- apply(pvals_lt, 2, func_estimate_pi0_storey, lambda = 0.5)
+                pi0_rt <- apply(pvals_rt, 2, func_estimate_pi0_storey, lambda = 0.5)
+            } else {
+                pi0_lt <- sapply(time_points, function(t) {            
+                    ## Number of individuals with observed time >= t
+                    n1 <- sum(data.cal$time >= t)
+                    ## Number of censored individuals with censoring time <= t (may or may not be alive, count them as alive)
+                    n2 <- sum(data.cal$event[data.cal$time <= t] == 0)
+                    ## Estimate of proportion alive
+                    (1 + n1 + n2) / (1 + nrow(data.cal))
+                })
+                pi0_rt <- sapply(time_points, function(t) {            
+                    ## Number of individuals with observed time <= t (count them all as dead, even if censored)
+                    n1 <- sum(data.cal$time <= t)
+                    ## Estimate of proportion alive
+                    (1 + n1) / (1 + nrow(data.cal))
+                })
+            }
+            ##print("Estimated pi0_lt:")
+            ##df_lt = tibble(time=time_points, storey=pi0_lt, new =pi0_lt)
+            ##print(df_lt, n=200)            
+            ##print("Estimated pi0_rt:")
+            ##df_rt = tibble(time=time_points, storey=pi0_rt, new =pi0_rt)
+            ##print(df_rt, n=200)
+            
             ## Repeat each value across all rows
             pi0_lt <- matrix(rep(pi0_lt, each = nrow(pvals_lt)), nrow = nrow(pvals_lt), byrow = FALSE)
             pi0_rt <- matrix(rep(pi0_rt, each = nrow(pvals_rt)), nrow = nrow(pvals_rt), byrow = FALSE)
