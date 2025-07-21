@@ -174,7 +174,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #' @param doubly_robust Logical. If `TRUE`, the bands are extended to include the fitted model predictions (default: `TRUE`).
 #' @param fast Logical. Whether to use fast, vectorized approximations for score and weight computations. Recommended. Default is `TRUE`.
 #' @param use_bh Logical. Whether to use the Benjamini–Hochberg adjustment to the conformal p-values. Recommended. Default is `TRUE`.
-#' @param estimate_pi0 Logical. Whether to estimate the null proportion, to increase power of BH. Default is `TRUE`.
+#' @param estimate_pi0 Method to use estimate the null proportion, to increase power of BH. Default is NULL. Other options are: "Storey", "Survival"
 #'
 #' @return A list with the following components:
 #' \describe{
@@ -192,7 +192,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #'
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
-                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, estimate_pi0=FALSE) {
+                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, estimate_pi0=NULL) {
     n.test <- nrow(data.test)
     if(is.null(time_points)) {
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
@@ -201,7 +201,9 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
     pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast)   
     pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast)
     ## Define Storey's estimator
-    use_storey <- TRUE
+    if(!is.null(estimate_pi0)) {
+        use_storey <- ifelse(estimate_pi0=="Storey", TRUE, FALSE)
+    }
     func_estimate_pi0_storey <- function(pvals, lambda = 0.5) {
         m <- length(pvals)
         pi0_hat <- (mean(pvals > lambda)+1/m) / (1-lambda)
@@ -210,7 +212,7 @@ conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model,
     }
     ## Calculate lower and upper bounds using BH
     if(use_bh) {
-        if(estimate_pi0) {
+        if(!is.null(estimate_pi0)) {
             ##cat("NOTE: using Storey's method.\n")
             ## Estimate an upper bound for the LT null proportion (proportion alive at time t)
             ## Estimate an upper bound for the RT null proportion (proportion dead at time t)
