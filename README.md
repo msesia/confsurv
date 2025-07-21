@@ -8,7 +8,7 @@ and implements the core methods described in the accompanying paper.
 
 > **Conformal Survival Bands for Risk Screening under Right-Censoring**  
 > Matteo Sesia and Vladimir Svetnik (2025)  
-> [link to arXiv preprint will be added soon]
+> [https://arxiv.org/abs/2505.04568](https://arxiv.org/abs/2505.04568)
 
 The repository containing examples and code to reproduce the results in the paper using this package is available here:  
 👉 [https://github.com/msesia/conformal_survival_screening](https://github.com/msesia/conformal_survival_screening)
