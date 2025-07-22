@@ -58,7 +58,7 @@ fast_predict_at_times <- function(model, data, target_times, time_grid = NULL, t
 #' @return A matrix of p-values (rows: patients, columns: time points).
 #' @keywords internal
 compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100, alternative="greater",
-                       break_ties=FALSE, fast=TRUE, boost_scores=FALSE) {
+                       break_ties=FALSE, fast=TRUE, boost_scores=TRUE) {
   if(is.null(time_points)) {
     time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
   }
@@ -206,7 +206,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #'
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
-                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, boost_scores=FALSE) {
+                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, boost_scores=TRUE) {
     n.test <- nrow(data.test)
     if(is.null(time_points)) {
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
