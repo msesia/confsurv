@@ -67,10 +67,10 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
   n <- nrow(data.cal)
   if(alternative=="greater") {
       score_lambda <- score_lambda
-      scoring_fun <- function(x, t) { surv_model$predict(x, t+score_lambda)$predictions}
+      scoring_fun <- function(x, t) { surv_model$predict(x, pmax(0,t+score_lambda))$predictions}
   } else if (alternative=="smaller") {
       score_lambda <- -score_lambda
-      scoring_fun <- function(x, t) { 1 - surv_model$predict(x, t+score_lambda)$predictions }
+      scoring_fun <- function(x, t) { 1 - surv_model$predict(x, pmax(0, t+score_lambda))$predictions }
   } else {
       stop("Error: unknown alternative!")
   }
@@ -87,7 +87,9 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
                              "smaller" = function(x) 1 - x,
                              stop("Unknown alternative")
       )
-      scores.cal.vec[idx.event] <- fast_predict_at_times(surv_model, new_data, event_times+score_lambda, transform=transform_fn)
+      scores.cal.vec[idx.event] <- fast_predict_at_times(surv_model, new_data,
+                                                         pmax(0, event_times+score_lambda),
+                                                         transform=transform_fn)
     }
   } else {
     scores.cal.vec[idx.event] <- sapply(idx.event, function(i) { scoring_fun(data.cal[i,], data.cal$time[i]+score_lambda)} )
