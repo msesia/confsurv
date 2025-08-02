@@ -53,23 +53,26 @@ fast_predict_at_times <- function(model, data, target_times, time_grid = NULL, t
 #' @param alternative `"greater"` or `"smaller"` — direction of the one-sided test.
 #' @param break_ties Whether to add random noise to break score ties (default: `FALSE`).
 #' @param fast Whether to use vectorized approximations (recommended: `TRUE`).
+#' @param use_weights Logical. Whether to use IPCW. Recommended. Default is `TRUE`.
 #' @param boost_scores Whether to use boosted conformity scores. Recommended. Default is `TRUE`
 #'
 #' @return A matrix of p-values (rows: patients, columns: time points).
 #' @keywords internal
 compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100, alternative="greater",
-                       break_ties=FALSE, fast=TRUE, boost_scores=TRUE) {
+                       break_ties=FALSE, fast=TRUE, use_weights=TRUE, boost_scores=TRUE, score_lambda=0) {
   if(is.null(time_points)) {
     time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
   }
   n_time_points <- length(time_points)
   n <- nrow(data.cal)
   if(alternative=="greater") {
-    scoring_fun <- function(x, t) { surv_model$predict(x, t)$predictions}
+      score_lambda <- score_lambda
+      scoring_fun <- function(x, t) { surv_model$predict(x, t+score_lambda)$predictions}
   } else if (alternative=="smaller") {
-    scoring_fun <- function(x, t) { 1 - surv_model$predict(x, t)$predictions }
+      score_lambda <- -score_lambda
+      scoring_fun <- function(x, t) { 1 - surv_model$predict(x, t+score_lambda)$predictions }
   } else {
-    stop("Error: unknown alternative!")
+      stop("Error: unknown alternative!")
   }
   ## Compute calibration scores
   scores.cal.vec <- rep(NA, n)
@@ -84,10 +87,10 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
                              "smaller" = function(x) 1 - x,
                              stop("Unknown alternative")
       )
-      scores.cal.vec[idx.event] <- fast_predict_at_times(surv_model, new_data, event_times, transform=transform_fn)
+      scores.cal.vec[idx.event] <- fast_predict_at_times(surv_model, new_data, event_times+score_lambda, transform=transform_fn)
     }
   } else {
-    scores.cal.vec[idx.event] <- sapply(idx.event, function(i) { scoring_fun(data.cal[i,], data.cal$time[i])} )
+    scores.cal.vec[idx.event] <- sapply(idx.event, function(i) { scoring_fun(data.cal[i,], data.cal$time[i]+score_lambda)} )
   }
   scores.test <- scoring_fun(data.test, time_points)
   if(break_ties) {
@@ -97,7 +100,6 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 
   scores.cal <- matrix(rep(scores.cal.vec, n_time_points), ncol = n_time_points)
   if(boost_scores) {
-      print("[DEBUG]: boosting scores")
       if(alternative=="greater") {
           boost.comparison <- outer(data.cal$time, time_points, FUN = "<=")
       } else {
@@ -111,22 +113,26 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
   compare_fun_equal <- match.fun("==")
 
   ## Compute IPC weights
-  weights <- rep(NA, n)
-  if (fast) {
-    weights <- rep(NA, n)
-    if (length(idx.event) > 0) {
-      new_data <- data.cal[idx.event, , drop = FALSE]
-      event_times <- data.cal$time[idx.event]
-      weights[idx.event] <- 1 / pmax(fast_predict_at_times(cens_model, new_data, event_times, transform=identity), 1e-6)
-    }
+  if(use_weights) {
+      weights <- rep(NA, n)
+      if (fast) {
+          weights <- rep(NA, n)
+          if (length(idx.event) > 0) {
+              new_data <- data.cal[idx.event, , drop = FALSE]
+              event_times <- data.cal$time[idx.event]
+              weights[idx.event] <- 1 / pmax(fast_predict_at_times(cens_model, new_data, event_times, transform=identity), 1e-6)
+          }
+      } else {
+          weights[idx.event] <- sapply(idx.event, function(i) {
+              prob.cens <- cens_model$predict(data.cal[i,], data.cal$time[i])$predictions
+              return(1/prob.cens)
+          } )
+      }
+      ## For numerical stability, do not allow extremely large weights
+      weights[weights>n] <- n
   } else {
-    weights[idx.event] <- sapply(idx.event, function(i) {
-      prob.cens <- cens_model$predict(data.cal[i,], data.cal$time[i])$predictions
-      return(1/prob.cens)
-    } )
+      weights <- rep(1, n)
   }
-  ## For numerical stability, do not allow extremely large weights
-  weights[weights>n] <- n
 
   if(length(idx.event)>0) {
     den <- 1+sum(weights[idx.event])
@@ -159,14 +165,14 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
     ##print(pmin(1, num_values / den))
   }
 
-  ## Enforce mononicity with respect to horizong by computing the running max
-  if(FALSE) {
-    if(alternative=="greater") {
-      pvals_matrix <- t(apply(pvals_matrix, 1, function(row) cummax(row)))
-    } else {
-      pvals_matrix <- t(apply(pvals_matrix, 1, function(row) rev(cummax(rev(row)))))
-    }
-  }
+  ## ## Enforce mononicity with respect to horizon by computing the running max
+  ## if(FALSE) {
+  ##   if(alternative=="greater") {
+  ##     pvals_matrix <- t(apply(pvals_matrix, 1, function(row) cummax(row)))
+  ##   } else {
+  ##     pvals_matrix <- t(apply(pvals_matrix, 1, function(row) rev(cummax(rev(row)))))
+  ##   }
+  ## }
 
   pvals_matrix <- matrix(pvals_matrix, nrow(data.test), ncol = length(time_points))
   colnames(pvals_matrix) <- time_points
@@ -188,6 +194,7 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #' @param doubly_robust Logical. If `TRUE`, the bands are extended to include the fitted model predictions (default: `TRUE`).
 #' @param fast Logical. Whether to use fast, vectorized approximations for score and weight computations. Recommended. Default is `TRUE`.
 #' @param use_bh Logical. Whether to use the Benjamini–Hochberg adjustment to the conformal p-values. Recommended. Default is `TRUE`.
+#' @param use_weights Logical. Whether to use IPCW. Recommended. Default is `TRUE`.
 #' @param boost_scores Whether to use boosted conformity scores. Recommended. Default is `TRUE`
 #'
 #' @return A list with the following components:
@@ -206,14 +213,16 @@ compute_cp <- function(data.test, data.cal, surv_model, cens_model, time_points=
 #'
 #' @export
 conformal_survival_band <- function(data.test, data.cal, surv_model, cens_model, time_points=NULL, num_time_points=100,
-                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, boost_scores=TRUE) {
+                                    doubly_robust=TRUE, fast=TRUE, use_bh=TRUE, use_weights=TRUE, boost_scores=TRUE, score_lambda=0) {
     n.test <- nrow(data.test)
     if(is.null(time_points)) {
         time_points <- seq(0, max(data.cal$time), length.out=num_time_points)
     }
     ## Calculate conformal pvalues
-    pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast, boost_scores=boost_scores)
-    pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast, boost_scores=boost_scores)
+    pvals_rt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="greater", fast=fast, use_weights=use_weights,
+                           boost_scores=boost_scores, score_lambda=score_lambda)
+    pvals_lt <- compute_cp(data.test, data.cal, surv_model, cens_model, time_points, alternative="smaller", fast=fast, use_weights=use_weights,
+                           boost_scores=boost_scores, score_lambda=score_lambda)
     ## Calculate lower and upper bounds using BH
     if(use_bh) {
         upper <- apply(pvals_lt, 2, p.adjust, method = "BH")
